@@ -10,7 +10,6 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/interrupt.h>
-#include <linux/io.h>
 
 /**
    デバイス情報と初期化関数の定義
@@ -39,8 +38,6 @@ static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
     int err;
     int irq;
-    void __iomem *hw_addr;
-    void __iomem *wc_mem;
 
     // デバイスを有効化
     err = pci_enable_device(pdev);
@@ -58,19 +55,9 @@ static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
     }
 
     // メモリマップドI/Oの取得
-    hw_addr = pci_iomap(pdev, 0, pci_resource_len(pdev, 0));
+    void __iomem *hw_addr = pci_iomap(pdev, 0, pci_resource_len(pdev, 0));
     if (!hw_addr) {
         pr_err("Failed to map PCI I/O memory\n");
-        pci_release_regions(pdev);
-        pci_disable_device(pdev);
-        return -ENOMEM;
-    }
-
-    // WriteCombinedメモリのマッピング
-    wc_mem = ioremap_wc(pci_resource_start(pdev, 0), pci_resource_len(pdev, 0));
-    if (!wc_mem) {
-        pr_err("Failed to map WriteCombined memory\n");
-        pci_iounmap(pdev, hw_addr);
         pci_release_regions(pdev);
         pci_disable_device(pdev);
         return -ENOMEM;
@@ -84,7 +71,6 @@ static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
     err = request_irq(irq, fpga_pci_irq_handler, IRQF_SHARED, DRIVER_NAME, pdev);
     if (err) {
         pr_err("Failed to request IRQ %d\n", irq);
-        iounmap(wc_mem);
         pci_iounmap(pdev, hw_addr);
         pci_release_regions(pdev);
         pci_disable_device(pdev);
@@ -101,11 +87,9 @@ static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 static void fpga_pci_remove(struct pci_dev *pdev)
 {
     void __iomem *hw_addr = pci_get_drvdata(pdev);
-    void __iomem *wc_mem = ioremap_wc(pci_resource_start(pdev, 0), pci_resource_len(pdev, 0));
     int irq = pdev->irq;
 
     free_irq(irq, pdev);
-    iounmap(wc_mem);
     pci_iounmap(pdev, hw_addr);
     pci_release_regions(pdev);
     pci_disable_device(pdev);
