@@ -1,3 +1,8 @@
+/**
+   ユーザー空間とのインターフェース: ioctlやread/writeなどを使ってユーザー空間からデバイスとやりとりを行います。
+   割り込みハンドリング: FPGAの割り込みを処理するために割り込みハンドラを登録します (request_irqを使用)。
+*/
+
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/init.h>
@@ -5,6 +10,10 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 
+/**
+   デバイス情報と初期化関数の定義
+   PCIeデバイスを認識し、リソースを割り当てるための情報を保持します。
+*/
 #define DRIVER_NAME "fpga_pci"
 
 static struct pci_device_id fpga_pci_ids[] = {
@@ -13,6 +22,11 @@ static struct pci_device_id fpga_pci_ids[] = {
 };
 MODULE_DEVICE_TABLE(pci, fpga_pci_ids);
 
+
+/**
+   PCIデバイスのプローブ関数
+   デバイスが認識された際に呼ばれる関数です。この中でメモリのマッピングやリソースの設定を行います。
+*/
 static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
     int err;
@@ -48,6 +62,9 @@ static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
     return 0;
 }
 
+/**
+   デバイス削除時のクリーンアップ関数
+*/
 static void fpga_pci_remove(struct pci_dev *pdev)
 {
     void __iomem *hw_addr = pci_get_drvdata(pdev);
@@ -57,6 +74,11 @@ static void fpga_pci_remove(struct pci_dev *pdev)
     pr_info("FPGA PCI device removed\n");
 }
 
+
+/**
+  PCIドライバ構造体の定義
+  プローブ関数と削除関数をPCIドライバに登録します。
+*/
 static struct pci_driver fpga_pci_driver = {
     .name = DRIVER_NAME,
     .id_table = fpga_pci_ids,
@@ -64,6 +86,9 @@ static struct pci_driver fpga_pci_driver = {
     .remove = fpga_pci_remove,
 };
 
+/**
+   モジュールの初期化とクリーンアップ
+*/
 static int __init fpga_pci_init(void)
 {
     return pci_register_driver(&fpga_pci_driver);
