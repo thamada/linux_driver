@@ -9,7 +9,6 @@
 #include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
-#include <linux/interrupt.h>
 
 /**
    デバイス情報と初期化関数の定義
@@ -23,12 +22,6 @@ static struct pci_device_id fpga_pci_ids[] = {
 };
 MODULE_DEVICE_TABLE(pci, fpga_pci_ids);
 
-static irqreturn_t fpga_pci_irq_handler(int irq, void *dev_id)
-{
-    pr_info("FPGA PCI interrupt handled\n");
-    // 割り込み処理の実装をここに追加します
-    return IRQ_HANDLED;
-}
 
 /**
    PCIデバイスのプローブ関数
@@ -37,7 +30,6 @@ static irqreturn_t fpga_pci_irq_handler(int irq, void *dev_id)
 static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
     int err;
-    int irq;
 
     // デバイスを有効化
     err = pci_enable_device(pdev);
@@ -64,19 +56,8 @@ static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
     }
 
     // FPGAに対するレジスタ操作などを行うためのアドレスが`hw_addr`に割り当てられます
+
     pci_set_drvdata(pdev, hw_addr);
-
-    // 割り込みの設定
-    irq = pdev->irq;
-    err = request_irq(irq, fpga_pci_irq_handler, IRQF_SHARED, DRIVER_NAME, pdev);
-    if (err) {
-        pr_err("Failed to request IRQ %d\n", irq);
-        pci_iounmap(pdev, hw_addr);
-        pci_release_regions(pdev);
-        pci_disable_device(pdev);
-        return err;
-    }
-
     pr_info("FPGA PCI device initialized successfully\n");
     return 0;
 }
@@ -87,16 +68,14 @@ static int fpga_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 static void fpga_pci_remove(struct pci_dev *pdev)
 {
     void __iomem *hw_addr = pci_get_drvdata(pdev);
-    int irq = pdev->irq;
-
-    free_irq(irq, pdev);
     pci_iounmap(pdev, hw_addr);
     pci_release_regions(pdev);
     pci_disable_device(pdev);
     pr_info("FPGA PCI device removed\n");
 }
 
-/*
+
+/**
   PCIドライバ構造体の定義
   プローブ関数と削除関数をPCIドライバに登録します。
 */
